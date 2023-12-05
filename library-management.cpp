@@ -1,15 +1,16 @@
 #include <iostream>
 #include <fstream>
 #include <vector>
+#include <algorithm>
+
 using namespace std;
-
-class Book {
+class Item {
 public:
-    Book(const string& name, const string& author, int id, double price)
-        : name(name), author(author), id(id), price(price) {}
+    Item(const string& title, const string& author, int id) 
+        : title(title), author(author), id(id), available(true) {}
 
-    const string& getName() const {
-        return name;
+    const string& getTitle() const {
+        return title;
     }
 
     const string& getAuthor() const {
@@ -20,60 +21,166 @@ public:
         return id;
     }
 
-    double getPrice() const {
-        return price;
+    bool isAvailable() const {
+        return available;
     }
 
-    void displayDetails() const {
-        cout << "Book ID: " << id << endl;
-        cout << "Name: " << name << endl;
+    virtual void borrowItem() {
+        if (available) {
+            available = false;
+            cout << "Item borrowed successfully." << endl;
+        } else {
+            cout << "Item is not available for borrowing." << endl;
+        }
+    }
+
+    virtual void returnItem() {
+        available = true;
+        cout << "Item returned successfully." << endl;
+    }
+
+    virtual void displayDetails() const {
+        cout << "Item ID: " << id << endl;
+        cout << "Title: " << title << endl;
         cout << "Author: " << author << endl;
-        cout << "Price: $" << price << endl;
+        cout << "Status: " << (available ? "Available" : "Not Available") << std::endl;
         cout << "------------------------" << endl;
     }
 
-private:
-    string name;
+    virtual char getItemType() const {
+        return 'I'; // Base class identifier
+    }
+
+    virtual ~Item() {}
+
+protected:
+    string title;
     string author;
     int id;
-    double price;
+    bool available;
 };
 
-void saveBooksToFile(const vector<Book>& books, const string& filename) {
-    ofstream file(filename);
-    if (file.is_open()) {
-        for (const auto& book : books) {
-            file << book.getName() << ' ' << book.getAuthor() << ' ' << book.getId() << ' ' << book.getPrice() << '\n';
-        }
-        cout << "Books saved to file successfully." << endl;
-    } else {
-        cout << "Unable to save books to file." << endl;
-    }
-}
+class Book : public Item {
+public:
+    Book(const string& title, const string& author, int id, const string& genre) 
+        : Item(title, author, id), genre(genre) {}
 
-void loadBooksFromFile(vector<Book>& books, const string& filename) {
-    books.clear(); // Clear existing books when loading from a file
-
-    ifstream file(filename);
-    if (file.is_open()) {
-        string name, author;
-        int id;
-        double price;
-        while (file >> name >> author >> id >> price) {
-            books.push_back(Book(name, author, id, price));
-        }
-        cout << "Books loaded from file successfully." << endl;
-    } else {
-        cout << "Unable to load books from file." << endl;
+    void displayDetails() const override {
+        Item::displayDetails();
+        cout << "Genre: " << genre << endl;
     }
-}
+
+    char getItemType() const override {
+        return 'B'; // Derived class identifier
+    }
+
+private:
+    string genre;
+};
+
+class Library {
+public:
+    void addItem(Item* item) {
+        items.push_back(item);
+    }
+
+    void displayAllItems() const {
+        if (items.empty()) {
+            cout << "No items in the library." << endl;
+        } else {
+            for (const auto& item : items) {
+                item->displayDetails();
+            }
+        }
+    }
+
+    void borrowItem(int itemId) {
+        auto it = find_if(items.begin(), items.end(), [itemId](const Item* i) {
+            return i->getId() == itemId;
+        });
+
+        if (it != items.end()) {
+            (*it)->borrowItem();
+        } else {
+            cout << "Item not found." << endl;
+        }
+    }
+
+    void returnItem(int itemId) {
+        auto it = find_if(items.begin(), items.end(), [itemId](const Item* i) {
+            return i->getId() == itemId;
+        });
+
+        if (it != items.end()) {
+            (*it)->returnItem();
+        } else {
+            cout << "Item not found." << endl;
+        }
+    }
+
+    void saveLibraryToFile(const string& filename) const {
+        ofstream file(filename);
+        if (file.is_open()) {
+            for (const auto& item : items) {
+                file << item->getItemType() << ' '
+                     << item->getId() << ' '
+                     << item->getTitle() << ' '
+                     << item->getAuthor() << ' ';
+                if (item->getItemType() == 'B') {
+                    Book* book = dynamic_cast<Book*>(item);
+                    file << book->getItemType() << ' ';
+                }
+                file << '\n';
+            }
+            cout << "Library saved to file successfully." << endl;
+        } else {
+            cout << "Unable to save library to file." << endl;
+        }
+    }
+
+    void loadLibraryFromFile(const string& filename) {
+        items.clear(); // Clear existing items when loading from a file
+
+        ifstream file(filename);
+        if (file.is_open()) {
+            char itemType;
+            while (file >> itemType) {
+                int id;
+                string title, author;
+
+                file >> id >> title >> author;
+
+                if (itemType == 'B') {
+                    string genre;
+                    file >> genre;
+                    items.push_back(new Book(title, author, id, genre));
+                } else {
+                    items.push_back(new Item(title, author, id));
+                }
+            }
+            cout << "Library loaded from file successfully." << endl;
+        } else {
+            cout << "Unable to load library from file." << endl;
+        }
+    }
+
+    ~Library() {
+        // Clean up allocated memory
+        for (auto& item : items) {
+            delete item;
+        }
+    }
+
+private:
+    vector<Item*> items;
+};
 
 int main() {
-    vector<Book> books;
+    Library library;
 
     while (true) {
-        cout << "\nSimple Book Management Menu:" << endl;
-        cout << "1. Add Book\n2. Display All Books\n3. Save Books to File\n4. Load Books from File\n5. Exit\n";
+        cout << "\nLibrary Management System Menu:" << endl;
+        cout << "1. Add Item\n2. Display All Items\n3. Borrow Item\n4. Return Item\n5. Save Library to File\n6. Load Library from File\n7. Exit\n";
         cout << "Enter your choice: ";
 
         int choice;
@@ -82,48 +189,67 @@ int main() {
 
         switch (choice) {
             case 1: {
-                string name, author;
+                string title, author, genre;
                 int id;
-                double price;
 
-                cout << "Enter book name: ";
-                getline(cin, name);
+                cout << "Enter item title: ";
+                getline(cin, title);
 
-                cout << "Enter author name: ";
+                cout << "Enter author/genre: ";
                 getline(cin, author);
 
-                cout << "Enter book ID: ";
+                cout << "Enter item ID: ";
                 cin >> id;
 
-                cout << "Enter book price: $";
-                cin >> price;
+                char itemType;
+                cout << "Enter item type (I for Item, B for Book): ";
+                cin >> itemType;
+                cin.ignore(); // Clear the newline character from the input buffer
 
-                books.push_back(Book(name, author, id, price));
+                if (itemType == 'B') {
+                    cout << "Enter book genre: ";
+                    getline(cin, genre);
+                    library.addItem(new Book(title, author, id, genre));
+                } else {
+                    library.addItem(new Item(title, author, id));
+                }
 
-                cout << "Book added successfully." << endl;
+                cout << "Item added successfully." << endl;
                 break;
             }
             case 2:
-                cout << "\nAll Books:\n";
-                for (const auto& book : books) {
-                    book.displayDetails();
-                }
+                cout << "\nAll Items in the Library:\n";
+                library.displayAllItems();
                 break;
             case 3: {
-                string filename;
-                cout << "Enter filename to save books: ";
-                cin >> filename;
-                saveBooksToFile(books, filename);
+                int itemId;
+                cout << "Enter item ID to borrow: ";
+                cin >> itemId;
+                library.borrowItem(itemId);
                 break;
             }
             case 4: {
-                string filename;
-                cout << "Enter filename to load books: ";
-                cin >> filename;
-                loadBooksFromFile(books, filename);
+                int itemId;
+                cout << "Enter item ID to return: ";
+                cin >> itemId;
+                library.returnItem(itemId);
                 break;
             }
-            case 5:
+            case 5: {
+                string filename;
+                cout << "Enter filename to save library: ";
+                cin >> filename;
+                library.saveLibraryToFile(filename);
+                break;
+            }
+            case 6: {
+                string filename;
+                cout << "Enter filename to load library: ";
+                cin >> filename;
+                library.loadLibraryFromFile(filename);
+                break;
+            }
+            case 7:
                 cout << "Exiting program. Goodbye!\n";
                 return 0;
             default:
